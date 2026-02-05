@@ -1,5 +1,6 @@
 use rspack_core::{
-  Compilation, RuntimeModule, RuntimeModuleStage, RuntimeTemplate, impl_runtime_module,
+  RuntimeModule, RuntimeModuleGenerateContext, RuntimeModuleStage, RuntimeTemplate,
+  impl_runtime_module,
 };
 
 #[impl_runtime_module]
@@ -14,7 +15,7 @@ impl ShareContainerRuntimeModule {
 
 #[async_trait::async_trait]
 impl RuntimeModule for ShareContainerRuntimeModule {
-  async fn generate(&self, _compilation: &Compilation) -> rspack_error::Result<String> {
+  async fn generate(&self, _: &RuntimeModuleGenerateContext<'_>) -> rspack_error::Result<String> {
     Ok(
       "__webpack_require__.federation = { instance: undefined,bundlerRuntime: undefined };"
         .to_string(),
