@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use rspack_core::{
   ChunkUkey, Compilation, CompilationAdditionalChunkRuntimeRequirements, CompilationParams,
   CompilationRuntimeRequirementInTree, CompilerCompilation, DependencyId, ModuleIdentifier, Plugin,
-  RuntimeGlobals, RuntimeModule,
+  RuntimeCodeTemplate, RuntimeGlobals, RuntimeModule,
   rspack_sources::{ConcatSource, RawStringSource, SourceExt},
 };
 use rspack_error::Result;
@@ -176,6 +176,7 @@ async fn render_startup(
   chunk_ukey: &ChunkUkey,
   _module: &ModuleIdentifier,
   render_source: &mut RenderSource,
+  runtime_template: &RuntimeCodeTemplate<'_>,
 ) -> Result<()> {
   let chunk = compilation.chunk_by_ukey.expect_get(chunk_ukey);
 
@@ -222,9 +223,7 @@ async fn render_startup(
     startup_with_call.add(RawStringSource::from_static(
       "\n// Federation startup call\n",
     ));
-    let startup_global = compilation
-      .runtime_template
-      .render_runtime_globals(&RuntimeGlobals::STARTUP);
+    let startup_global = runtime_template.render_runtime_globals(&RuntimeGlobals::STARTUP);
     startup_with_call.add(RawStringSource::from(format!("{startup_global}();\n",)));
 
     startup_with_call.add(render_source.source.clone());

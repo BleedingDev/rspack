@@ -5,8 +5,8 @@ use rspack_core::{
   BoxDependency, ChunkUkey, CodeGenerationExportsFinalNames, Compilation,
   CompilationOptimizeChunkModules, CompilationParams, CompilerCompilation, CompilerFinishMake,
   ConcatenatedModule, ConcatenatedModuleExportsDefinitions, DependencyId, ExportsType,
-  LibraryOptions, ModuleGraph, ModuleIdentifier, Plugin, PrefetchExportsInfoMode, RuntimeSpec,
-  RuntimeVariable, UsedNameItem,
+  LibraryOptions, ModuleGraph, ModuleIdentifier, Plugin, PrefetchExportsInfoMode,
+  RuntimeCodeTemplate, RuntimeSpec, RuntimeVariable, UsedNameItem,
   rspack_sources::{ConcatSource, RawStringSource, SourceExt},
   to_identifier,
 };
@@ -252,6 +252,7 @@ async fn render_startup(
   chunk_ukey: &ChunkUkey,
   module_id: &ModuleIdentifier,
   render_source: &mut RenderSource,
+  runtime_template: &RuntimeCodeTemplate<'_>,
 ) -> Result<()> {
   let chunk = compilation.chunk_by_ukey.expect_get(chunk_ukey);
   let codegen = compilation
@@ -316,9 +317,7 @@ async fn render_startup(
       }
     }
 
-    let exports_name = compilation
-      .runtime_template
-      .render_runtime_variable(&RuntimeVariable::Exports);
+    let exports_name = runtime_template.render_runtime_variable(&RuntimeVariable::Exports);
 
     for (final_name, info_name) in exports_with_property_access.iter() {
       let var_name = format!("{exports_name}{}", to_identifier(info_name));

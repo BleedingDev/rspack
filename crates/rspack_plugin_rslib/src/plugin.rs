@@ -6,7 +6,8 @@ use std::{
 use rspack_core::{
   AssetEmittedInfo, ChunkUkey, Compilation, CompilationParams, CompilerAssetEmitted,
   CompilerCompilation, CompilerFinishMake, ModuleType, NormalModuleFactoryParser,
-  ParserAndGenerator, ParserOptions, Plugin, get_module_directives, get_module_hashbang,
+  ParserAndGenerator, ParserOptions, Plugin, RuntimeCodeTemplate, get_module_directives,
+  get_module_hashbang,
   rspack_sources::{ConcatSource, RawStringSource, Source, SourceExt},
 };
 use rspack_error::Result;
@@ -112,6 +113,7 @@ async fn render(
   compilation: &Compilation,
   chunk_ukey: &ChunkUkey,
   render_source: &mut RenderSource,
+  _runtime_template: &RuntimeCodeTemplate<'_>,
 ) -> Result<()> {
   // NOTE: This function handles hashbang and directives for non new ESM library formats.
   // Similar logic exists in rspack_plugin_esm_library/src/render.rs for ESM format,

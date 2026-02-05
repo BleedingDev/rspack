@@ -16,7 +16,8 @@ use rspack_core::{
   ConcatenationScope, DependencyType, ExternalModuleInfo, GetTargetResult, Logger,
   ModuleFactoryCreateData, ModuleGraph, ModuleIdentifier, ModuleInfo, ModuleType,
   NormalModuleFactoryAfterFactorize, NormalModuleFactoryParser, ParserAndGenerator, ParserOptions,
-  Plugin, PrefetchExportsInfoMode, RuntimeGlobals, RuntimeModule, get_target, is_esm_dep_like,
+  Plugin, PrefetchExportsInfoMode, RuntimeCodeTemplate, RuntimeGlobals, RuntimeModule, get_target,
+  is_esm_dep_like,
   rspack_sources::{ReplaceSource, Source},
 };
 use rspack_error::{Diagnostic, Result};
@@ -90,8 +91,11 @@ async fn render_chunk_content(
   compilation: &Compilation,
   chunk_ukey: &ChunkUkey,
   asset_info: &mut AssetInfo,
+  runtime_template: &RuntimeCodeTemplate<'_>,
 ) -> Result<Option<RenderSource>> {
-  self.render_chunk(compilation, chunk_ukey, asset_info).await
+  self
+    .render_chunk(compilation, chunk_ukey, asset_info, runtime_template)
+    .await
 }
 
 #[plugin_hook(CompilationFinishModules for EsmLibraryPlugin, stage = 100)]

@@ -416,6 +416,7 @@ async fn render_manifest(
   manifest: &mut Vec<RenderManifestEntry>,
   diagnostics: &mut Vec<Diagnostic>,
 ) -> Result<()> {
+  let _runtime_template = compilation.runtime_template.create_runtime_code_template();
   let chunk = compilation.chunk_by_ukey.expect_get(chunk_ukey);
   if matches!(chunk.kind(), ChunkKind::HotUpdate) {
     return Ok(());
