@@ -71,10 +71,10 @@ use crate::{
   ChunkRenderCacheArtifact, ChunkRenderResult, ChunkUkey, CodeGenerateCacheArtifact,
   CodeGenerationJob, CodeGenerationResult, CodeGenerationResults, CompilationLogger,
   CompilationLogging, CompilerOptions, CompilerPlatform, ConcatenationScope,
-  DependenciesDiagnosticsArtifact, DependencyCodeGeneration, DependencyId, DependencyTemplate,
-  DependencyTemplateType, DependencyType, DerefOption, Entry, EntryData, EntryOptions,
-  EntryRuntime, Entrypoint, ExecuteModuleId, ExtendedReferencedExport, Filename, ImportPhase,
-  ImportVarMap, ImportedByDeferModulesArtifact, MemoryGCStorage, ModuleFactory, ModuleGraph,
+  DependenciesDiagnosticsArtifact, DependencyId, DependencyTemplate, DependencyTemplateType,
+  DependencyType, DerefOption, Entry, EntryData, EntryOptions, EntryRuntime, Entrypoint,
+  ExecuteModuleId, ExtendedReferencedExport, Filename, ImportPhase, ImportVarMap,
+  ImportedByDeferModulesArtifact, MemoryGCStorage, ModuleFactory, ModuleGraph,
   ModuleGraphCacheArtifact, ModuleIdentifier, ModuleIdsArtifact, ModuleStaticCache, PathData,
   ProcessRuntimeRequirementsCacheArtifact, ResolverFactory, RuntimeGlobals, RuntimeKeyMap,
   RuntimeMode, RuntimeModule, RuntimeSpec, RuntimeSpecMap, RuntimeTemplate, SharedPluginDriver,
@@ -1238,11 +1238,9 @@ impl Compilation {
 
   pub fn get_dependency_template(
     &self,
-    dep: &dyn DependencyCodeGeneration,
+    template_type: DependencyTemplateType,
   ) -> Option<Arc<dyn DependencyTemplate>> {
-    dep
-      .dependency_template()
-      .and_then(|template_type| self.dependency_templates.get(&template_type).cloned())
+    self.dependency_templates.get(&template_type).cloned()
   }
 }
 
