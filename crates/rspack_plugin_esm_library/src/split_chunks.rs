@@ -263,26 +263,32 @@ pub(crate) async fn split(groups: &[CacheGroup], compilation: &mut Compilation) 
   // module is guaranteed to be exist in only one group
   // we should merge modules' dependencies into the same group
   let module_graph = compilation.get_module_graph();
-  group_modules.par_iter_mut().for_each(|(_, match_group)| {
-    for m in match_group.modules.clone() {
-      // merge dependencies
+  let mut group_order = group_modules.keys().cloned().collect::<Vec<_>>();
+  group_order.sort_by(|a, b| match (a, b) {
+    (Either::Left(la), Either::Left(lb)) => la.cmp(lb),
+    (Either::Right(ra), Either::Right(rb)) => ra.cmp(rb),
+    (Either::Left(_), Either::Right(_)) => std::cmp::Ordering::Less,
+    (Either::Right(_), Either::Left(_)) => std::cmp::Ordering::Greater,
+  });
 
-      let mut stack = get_module_deps(m, module_graph);
-      while let Some(m) = stack.pop() {
-        // if module is already in any group, skip
-        if modules_in_group.contains(&m) {
+  for key in group_order {
+    let Some(match_group) = group_modules.get_mut(&key) else {
+      continue;
+    };
+
+    let mut stack = match_group.modules.clone().into_iter().collect::<Vec<_>>();
+    while let Some(module_identifier) = stack.pop() {
+      for dep in get_module_deps(module_identifier, module_graph) {
+        if !modules_in_group.insert(dep) {
           continue;
         }
-
-        // if module is already in the group, skip
-        if !match_group.add_module(m) {
+        if !match_group.add_module(dep) {
           continue;
         }
-
-        stack.extend(get_module_deps(m, module_graph));
+        stack.push(dep);
       }
     }
-  });
+  }
 
   let module_sizes = get_module_sizes(modules.par_iter().copied(), compilation);
 
