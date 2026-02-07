@@ -64,26 +64,25 @@ impl CodeSplitter {
     module: ModuleIdentifier,
     compilation: &mut Compilation,
   ) -> Result<Vec<ChunkReCreation>> {
-    let chunk_graph = &mut compilation.build_chunk_graph_artifact.chunk_graph;
+    let artifact = &mut *compilation.build_chunk_graph_artifact;
 
     // Step 1. find all invalidate chunk groups and remove module from ChunkGraph
-    let Some(cgm) = chunk_graph.get_chunk_graph_module_mut(module) else {
+    let Some(cgm) = artifact.chunk_graph.get_chunk_graph_module_mut(module) else {
       return Ok(vec![]);
     };
 
-    let invalidate_chunk_groups = cgm
-      .chunks
+    let chunk_ukeys = cgm.chunks.iter().copied().collect::<Vec<_>>();
+    let invalidate_chunk_groups = chunk_ukeys
       .iter()
       .flat_map(|chunk| {
-        let chunk = compilation
-          .build_chunk_graph_artifact
+        let chunk = artifact
           .chunk_by_ukey
           .expect_get(chunk);
         chunk.groups().clone()
       })
       .collect::<UkeySet<ChunkGroupUkey>>();
 
-    chunk_graph.remove_module(module);
+    artifact.chunk_graph.remove_module(module);
 
     let mut removed = vec![];
     for chunk_group_ukey in &invalidate_chunk_groups {
@@ -173,12 +172,11 @@ impl CodeSplitter {
       }
     }
 
-    let chunk_graph = &mut compilation.build_chunk_graph_artifact.chunk_graph;
+    let artifact = &mut *compilation.build_chunk_graph_artifact;
 
     // remove cgc and cgm
     for chunk_ukey in chunk_group.chunks.iter() {
-      let Some(chunk) = compilation
-        .build_chunk_graph_artifact
+      let Some(chunk) = artifact
         .chunk_by_ukey
         .get_mut(chunk_ukey)
       else {
@@ -188,25 +186,23 @@ impl CodeSplitter {
       if chunk.remove_group(&chunk_group_ukey) && chunk.groups().is_empty() {
         // remove orphan chunk
         if let Some(name) = chunk.name() {
-          compilation
-            .build_chunk_graph_artifact
+          artifact
             .named_chunks
             .remove(name);
         }
-        compilation
-          .build_chunk_graph_artifact
+        artifact
           .chunk_by_ukey
           .remove(chunk_ukey);
 
         // remove cgc and cgm
-        if let Some(chunk_graph_chunk) = chunk_graph.remove_chunk(chunk_ukey) {
+        if let Some(chunk_graph_chunk) = artifact.chunk_graph.remove_chunk(chunk_ukey) {
           for &module_identifier in chunk_graph_chunk.modules() {
-            let Some(cgm) = chunk_graph.get_chunk_graph_module_mut(module_identifier) else {
+            let Some(cgm) = artifact.chunk_graph.get_chunk_graph_module_mut(module_identifier) else {
               continue;
             };
 
             if cgm.chunks.remove(chunk_ukey) && cgm.chunks.is_empty() {
-              chunk_graph.remove_module(module_identifier)
+              artifact.chunk_graph.remove_module(module_identifier)
             }
           }
         };
@@ -602,15 +598,16 @@ impl CodeSplitter {
     }
 
     // remove async entrypoints
-    compilation
-      .build_chunk_graph_artifact
-      .async_entrypoints
-      .retain(|cg_ukey| {
-        compilation
-          .build_chunk_graph_artifact
-          .chunk_group_by_ukey
-          .contains(cg_ukey)
-      });
+    {
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      artifact
+        .async_entrypoints
+        .retain(|cg_ukey| {
+          artifact
+            .chunk_group_by_ukey
+            .contains(cg_ukey)
+        });
+    }
 
     // If after edges rebuild there are still some entries not included in entrypoints
     // then they are new added entries and we build them.

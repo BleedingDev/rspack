@@ -14,28 +14,27 @@ impl RemoveEmptyChunksPlugin {
     let logger = compilation.get_logger(self.name());
     let start = logger.time("remove empty chunks");
 
-    let chunk_graph = &mut compilation.build_chunk_graph_artifact.chunk_graph;
-    let empty_chunks = compilation
-      .build_chunk_graph_artifact
+    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    let chunk_graph = &mut artifact.chunk_graph;
+    let empty_chunks = artifact
       .chunk_by_ukey
       .values()
       .filter(|chunk| {
         chunk_graph.get_number_of_chunk_modules(&chunk.ukey()) == 0
-          && !chunk.has_runtime(&compilation.build_chunk_graph_artifact.chunk_group_by_ukey)
+          && !chunk.has_runtime(&artifact.chunk_group_by_ukey)
           && chunk_graph.get_number_of_entry_modules(&chunk.ukey()) == 0
       })
       .map(|chunk| chunk.ukey())
       .collect::<Vec<_>>();
 
     for chunk_ukey in empty_chunks.iter() {
-      if let Some(mut chunk) = compilation
-        .build_chunk_graph_artifact
+      if let Some(mut chunk) = artifact
         .chunk_by_ukey
         .remove(chunk_ukey)
       {
         chunk_graph.disconnect_chunk(
           &mut chunk,
-          &mut compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
+          &mut artifact.chunk_group_by_ukey,
         );
         if let Some(mut mutations) = compilation.incremental.mutations_write() {
           mutations.add(Mutation::ChunkRemove { chunk: *chunk_ukey });

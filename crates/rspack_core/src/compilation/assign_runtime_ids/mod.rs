@@ -35,24 +35,24 @@ impl PassExt for AssignRuntimeIdsPass {
         chunk_graph.set_runtime_id(runtime, chunk.id().map(|id| id.to_string()));
       }
     }
-    for i in compilation.build_chunk_graph_artifact.entrypoints.iter() {
+    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    for i in artifact.entrypoints.iter() {
       process_entrypoint(
         i.1,
-        &compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
-        &compilation.build_chunk_graph_artifact.chunk_by_ukey,
-        &mut compilation.build_chunk_graph_artifact.chunk_graph,
+        &artifact.chunk_group_by_ukey,
+        &artifact.chunk_by_ukey,
+        &mut artifact.chunk_graph,
       )
     }
-    for i in compilation
-      .build_chunk_graph_artifact
+    for i in artifact
       .async_entrypoints
       .iter()
     {
       process_entrypoint(
         i,
-        &compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
-        &compilation.build_chunk_graph_artifact.chunk_by_ukey,
-        &mut compilation.build_chunk_graph_artifact.chunk_graph,
+        &artifact.chunk_group_by_ukey,
+        &artifact.chunk_by_ukey,
+        &mut artifact.chunk_graph,
       )
     }
     Ok(())

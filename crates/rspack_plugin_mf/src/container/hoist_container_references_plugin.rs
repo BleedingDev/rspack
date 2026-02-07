@@ -249,37 +249,32 @@ async fn optimize_chunks(&self, compilation: &mut Compilation) -> Result<Option<
         .chunk_graph
         .disconnect_chunk_and_module(&chunk, module);
 
-      if compilation
-        .build_chunk_graph_artifact
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      if artifact
         .chunk_graph
         .get_number_of_chunk_modules(&chunk)
         == 0
-        && compilation
-          .build_chunk_graph_artifact
+        && artifact
           .chunk_graph
           .get_number_of_entry_modules(&chunk)
           == 0
-        && let Some(mut removed_chunk) = compilation
-          .build_chunk_graph_artifact
+        && let Some(mut removed_chunk) = artifact
           .chunk_by_ukey
           .remove(&chunk)
       {
-        compilation
-          .build_chunk_graph_artifact
+        artifact
           .chunk_graph
           .disconnect_chunk(
             &mut removed_chunk,
-            &mut compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
+            &mut artifact.chunk_group_by_ukey,
           );
-        compilation
-          .build_chunk_graph_artifact
+        artifact
           .chunk_graph
           .remove_chunk(&chunk);
 
         // Remove from named chunks if it has a name
         if let Some(name) = removed_chunk.name() {
-          compilation
-            .build_chunk_graph_artifact
+          artifact
             .named_chunks
             .remove(name);
         }

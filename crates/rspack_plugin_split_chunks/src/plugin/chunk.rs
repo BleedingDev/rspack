@@ -130,18 +130,18 @@ impl SplitChunksPlugin {
         *is_reuse_existing_chunk = true;
         *chunk
       } else {
+        let artifact = &mut *compilation.build_chunk_graph_artifact;
         let (new_chunk_ukey, created) = Compilation::add_named_chunk(
           chunk_name.clone(),
-          &mut compilation.build_chunk_graph_artifact.chunk_by_ukey,
-          &mut compilation.build_chunk_graph_artifact.named_chunks,
+          &mut artifact.chunk_by_ukey,
+          &mut artifact.named_chunks,
         );
         if created && let Some(mut mutations) = compilation.incremental.mutations_write() {
           mutations.add(Mutation::ChunkAdd {
             chunk: new_chunk_ukey,
           });
         }
-        let new_chunk = compilation
-          .build_chunk_graph_artifact
+        let new_chunk = artifact
           .chunk_by_ukey
           .expect_get_mut(&new_chunk_ukey);
 
@@ -150,8 +150,7 @@ impl SplitChunksPlugin {
           *is_reuse_existing_chunk_with_all_modules,
         );
 
-        compilation
-          .build_chunk_graph_artifact
+        artifact
           .chunk_graph
           .add_chunk(new_chunk.ukey());
         new_chunk.ukey()
@@ -163,15 +162,15 @@ impl SplitChunksPlugin {
       *is_reuse_existing_chunk_with_all_modules = true;
       reusable_chunk
     } else {
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
       let new_chunk_ukey =
-        Compilation::add_chunk(&mut compilation.build_chunk_graph_artifact.chunk_by_ukey);
+        Compilation::add_chunk(&mut artifact.chunk_by_ukey);
       if let Some(mut mutations) = compilation.incremental.mutations_write() {
         mutations.add(Mutation::ChunkAdd {
           chunk: new_chunk_ukey,
         });
       }
-      let new_chunk = compilation
-        .build_chunk_graph_artifact
+      let new_chunk = artifact
         .chunk_by_ukey
         .expect_get_mut(&new_chunk_ukey);
 
@@ -180,8 +179,7 @@ impl SplitChunksPlugin {
         *is_reuse_existing_chunk_with_all_modules,
       );
 
-      compilation
-        .build_chunk_graph_artifact
+      artifact
         .chunk_graph
         .add_chunk(new_chunk.ukey());
       new_chunk.ukey()
@@ -241,8 +239,8 @@ impl SplitChunksPlugin {
     let new_chunk_ukey = new_chunk;
     for original_chunk_ukey in original_chunks {
       debug_assert!(&new_chunk_ukey != original_chunk_ukey);
-      let [Some(new_chunk), Some(original_chunk)] = compilation
-        .build_chunk_graph_artifact
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let [Some(new_chunk), Some(original_chunk)] = artifact
         .chunk_by_ukey
         .get_many_mut([&new_chunk_ukey, original_chunk_ukey])
       else {
@@ -250,7 +248,7 @@ impl SplitChunksPlugin {
       };
       original_chunk.split(
         new_chunk,
-        &mut compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
+        &mut artifact.chunk_group_by_ukey,
       );
       if let Some(mut mutations) = compilation.incremental.mutations_write() {
         mutations.add(Mutation::ChunkSplit {

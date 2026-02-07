@@ -395,22 +395,21 @@ async fn optimize_chunks(&self, compilation: &mut Compilation) -> Result<Option<
   logger.time_end(start);
 
   let start = logger.time("apply split chunks");
-  let chunk_graph = &mut compilation.build_chunk_graph_artifact.chunk_graph;
+  let artifact = &mut *compilation.build_chunk_graph_artifact;
   for chunk_state in chunk_states.values() {
     let mut chunks: UkeySet<ChunkUkey> = UkeySet::default();
     for module_identifier in &chunk_state.modules {
       if let Some(new_chunk_ukey) = new_chunks_by_module.get(module_identifier) {
-        chunk_graph.disconnect_chunk_and_module(&chunk_state.chunk, *module_identifier);
+        artifact.chunk_graph.disconnect_chunk_and_module(&chunk_state.chunk, *module_identifier);
         if chunks.contains(new_chunk_ukey) {
           continue;
         }
         chunks.insert(*new_chunk_ukey);
-        let chunk_by_ukey = &mut compilation.build_chunk_graph_artifact.chunk_by_ukey;
-        let [chunk, new_chunk] = chunk_by_ukey.get_many_mut([&chunk_state.chunk, new_chunk_ukey]);
+        let [chunk, new_chunk] = artifact.chunk_by_ukey.get_many_mut([&chunk_state.chunk, new_chunk_ukey]);
         #[allow(clippy::unwrap_used)]
         chunk.unwrap().split(
           new_chunk.unwrap(),
-          &mut compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
+          &mut artifact.chunk_group_by_ukey,
         );
       }
     }

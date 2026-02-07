@@ -41,6 +41,12 @@ impl<T> StealCell<T> {
   }
 }
 
+impl<T: Default> Default for StealCell<T> {
+  fn default() -> Self {
+    Self::new(T::default())
+  }
+}
+
 impl<T> Deref for StealCell<T> {
   type Target = T;
 

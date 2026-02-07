@@ -651,11 +651,12 @@ impl SplitChunksPlugin {
 
         if index != last_index {
           let old_chunk = chunk.ukey();
+          let artifact = &mut *compilation.build_chunk_graph_artifact;
           let new_chunk_ukey = if let Some(name) = name {
             let (new_chunk_ukey, created) = Compilation::add_named_chunk(
               name,
-              &mut compilation.build_chunk_graph_artifact.chunk_by_ukey,
-              &mut compilation.build_chunk_graph_artifact.named_chunks,
+              &mut artifact.chunk_by_ukey,
+              &mut artifact.named_chunks,
             );
             if created && let Some(mut mutations) = compilation.incremental.mutations_write() {
               mutations.add(Mutation::ChunkAdd {
@@ -665,7 +666,7 @@ impl SplitChunksPlugin {
             new_chunk_ukey
           } else {
             let new_chunk_ukey =
-              Compilation::add_chunk(&mut compilation.build_chunk_graph_artifact.chunk_by_ukey);
+              Compilation::add_chunk(&mut artifact.chunk_by_ukey);
             if let Some(mut mutations) = compilation.incremental.mutations_write() {
               mutations.add(Mutation::ChunkAdd {
                 chunk: new_chunk_ukey,
@@ -674,28 +675,34 @@ impl SplitChunksPlugin {
             new_chunk_ukey
           };
 
-          let [Some(new_part), Some(chunk)] = compilation
-            .build_chunk_graph_artifact
-            .chunk_by_ukey
-            .get_many_mut([&new_chunk_ukey, &old_chunk])
-          else {
-            panic!("split_from_original_chunks failed")
+          let new_part_ukey = {
+            let [Some(new_part), Some(chunk)] = artifact
+              .chunk_by_ukey
+              .get_many_mut([&new_chunk_ukey, &old_chunk])
+            else {
+              panic!("split_from_original_chunks failed")
+            };
+            let new_part_ukey = new_part.ukey();
+            chunk.split(
+              new_part,
+              &mut artifact.chunk_group_by_ukey,
+            );
+            *new_part.chunk_reason_mut() = chunk.chunk_reason().map(ToString::to_string);
+            if chunk.filename_template().is_some() {
+              new_part.set_filename_template(chunk.filename_template().cloned());
+            }
+            new_part_ukey
           };
-          let new_part_ukey = new_part.ukey();
-          chunk.split(
-            new_part,
-            &mut compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
-          );
-          *new_part.chunk_reason_mut() = chunk.chunk_reason().map(ToString::to_string);
-          if chunk.filename_template().is_some() {
-            new_part.set_filename_template(chunk.filename_template().cloned());
-          }
+
           if let Some(mut mutations) = compilation.incremental.mutations_write() {
             mutations.add(Mutation::ChunkSplit {
               from: old_chunk,
               to: new_chunk_ukey,
             });
           }
+
+          // End the mutable borrow of artifact before the closure
+         let _ = artifact;
 
           group.nodes.iter().for_each(|module| {
             compilation

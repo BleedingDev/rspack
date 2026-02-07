@@ -47,7 +47,7 @@ impl PassExt for ModuleIdsPass {
       compilation.module_ids_artifact.clear();
     }
 
-    let mut module_ids_artifact = mem::take(&mut compilation.module_ids_artifact);
+    let mut module_ids_artifact = compilation.module_ids_artifact.steal();
 
     // Call beforeModuleIds hook - allows plugins to assign custom IDs
     let modules_needing_ids = get_modules_needing_ids(compilation, &module_ids_artifact);
@@ -60,12 +60,12 @@ impl PassExt for ModuleIdsPass {
       .await
       .map_err(|e| e.wrap_err("caused by plugins in Compilation.hooks.beforeModuleIds"))?;
 
-    // Put artifact back so moduleIds plugins can see custom IDs from beforeModuleIds
+    // Temporarily restore artifact so moduleIds plugins can see custom IDs from beforeModuleIds
     // when they call get_used_module_ids_and_modules
-    compilation.module_ids_artifact = module_ids_artifact;
+    compilation.module_ids_artifact = module_ids_artifact.into();
+    let mut module_ids_artifact = compilation.module_ids_artifact.steal();
 
     let mut diagnostics = vec![];
-    let mut module_ids_artifact = mem::take(&mut compilation.module_ids_artifact);
     compilation
       .plugin_driver
       .clone()
@@ -74,7 +74,6 @@ impl PassExt for ModuleIdsPass {
       .call(compilation, &mut module_ids_artifact, &mut diagnostics)
       .await
       .map_err(|e| e.wrap_err("caused by plugins in Compilation.hooks.moduleIds"))?;
-    compilation.module_ids_artifact = module_ids_artifact;
     compilation.extend_diagnostics(diagnostics);
     Ok(())
   }

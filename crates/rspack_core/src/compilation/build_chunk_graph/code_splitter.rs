@@ -380,113 +380,117 @@ impl CodeSplitter {
       })
       .collect::<Vec<_>>();
 
-    let (chunk_ukey, created) = Compilation::add_named_chunk(
-      name.to_string(),
-      &mut compilation.build_chunk_graph_artifact.chunk_by_ukey,
-      &mut compilation.build_chunk_graph_artifact.named_chunks,
-    );
-    if created && let Some(mut mutations) = compilation.incremental.mutations_write() {
-      mutations.add(Mutation::ChunkAdd { chunk: chunk_ukey });
-    }
-    self.mask_by_chunk.insert(chunk_ukey, BigUint::from(0u32));
     let runtime = get_entry_runtime(name, options, &compilation.entries);
-    let chunk = compilation
-      .build_chunk_graph_artifact
-      .chunk_by_ukey
-      .expect_get_mut(&chunk_ukey);
+    let chunk_loading = options
+      .chunk_loading
+      .as_ref()
+      .unwrap_or(&compilation.options.output.chunk_loading);
+    let chunk_loading = !matches!(chunk_loading, ChunkLoading::Disable);
+    let async_chunks = options
+      .async_chunks
+      .unwrap_or(compilation.options.output.async_chunks);
 
-    let mut incremental_diagnostic = None;
-    if let Some(filename) = &entry_data.options.filename {
-      chunk.set_filename_template(Some(filename.clone()));
+    let has_hash_placeholder = entry_data
+      .options
+      .filename
+      .as_ref()
+      .map_or(false, |f| f.has_hash_placeholder());
 
-      if filename.has_hash_placeholder()
-        && let Some(diagnostic) = compilation.incremental.disable_passes(
-          IncrementalPasses::CHUNK_ASSET,
-          "Chunk filename that dependent on full hash",
-          "chunk filename that dependent on full hash is not supported in incremental compilation",
-        )
-      {
-        incremental_diagnostic = diagnostic;
+    let (chunk_ukey, entrypoint_ukey) = {
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let (chunk_ukey, created) = Compilation::add_named_chunk(
+        name.to_string(),
+        &mut artifact.chunk_by_ukey,
+        &mut artifact.named_chunks,
+      );
+      if created && let Some(mut mutations) = compilation.incremental.mutations_write() {
+        mutations.add(Mutation::ChunkAdd { chunk: chunk_ukey });
       }
-    }
+      self.mask_by_chunk.insert(chunk_ukey, BigUint::from(0u32));
+      let chunk = artifact
+        .chunk_by_ukey
+        .expect_get_mut(&chunk_ukey);
 
-    compilation
-      .build_chunk_graph_artifact
-      .chunk_graph
-      .add_chunk(chunk_ukey);
+      if let Some(filename) = &entry_data.options.filename {
+        chunk.set_filename_template(Some(filename.clone()));
+      }
 
-    let mut entrypoint = ChunkGroup::new(ChunkGroupKind::new_entrypoint(
-      true,
-      Box::new(options.clone()),
-    ));
+      artifact
+        .chunk_graph
+        .add_chunk(chunk_ukey);
 
-    for request in requests {
-      let loc = Some(DependencyLocation::Synthetic(
-        SyntheticDependencyLocation::new(name),
+      let mut entrypoint = ChunkGroup::new(ChunkGroupKind::new_entrypoint(
+        true,
+        Box::new(options.clone()),
       ));
-      entrypoint.add_origin(None, loc, request);
-    }
 
-    let chunk_group_info = {
-      self.stat_chunk_group_created += 1;
-      ChunkGroupInfo::new(
-        entrypoint.ukey,
-        Arc::new(runtime),
-        !matches!(
-          options
-            .chunk_loading
-            .as_ref()
-            .unwrap_or(&compilation.options.output.chunk_loading),
-          ChunkLoading::Disable
-        ),
-        options
-          .async_chunks
-          .unwrap_or(compilation.options.output.async_chunks),
-      )
+      for request in requests {
+        let loc = Some(DependencyLocation::Synthetic(
+          SyntheticDependencyLocation::new(name),
+        ));
+        entrypoint.add_origin(None, loc, request);
+      }
+
+      let chunk_group_info = {
+        self.stat_chunk_group_created += 1;
+        ChunkGroupInfo::new(
+          entrypoint.ukey,
+          Arc::new(runtime),
+          chunk_loading,
+          async_chunks,
+        )
+      };
+
+      if options.depend_on.is_none() && !matches!(&options.runtime, Some(EntryRuntime::String(_))) {
+        entrypoint.set_runtime_chunk(chunk.ukey());
+      }
+
+      entrypoint.set_entrypoint_chunk(chunk.ukey());
+      entrypoint.connect_chunk(chunk);
+
+      artifact
+        .named_chunk_groups
+        .insert(name.to_string(), entrypoint.ukey);
+
+      artifact
+        .entrypoints
+        .insert(name.to_string(), entrypoint.ukey);
+
+      let entrypoint = {
+        let ukey = entrypoint.ukey;
+        artifact
+          .chunk_group_by_ukey
+          .add(entrypoint);
+        artifact
+          .chunk_group_by_ukey
+          .expect_get(&ukey)
+      };
+
+      for module_identifier in module_identifiers.iter() {
+        artifact
+          .chunk_graph
+          .add_module(*module_identifier);
+
+        modules.push(*module_identifier);
+
+        artifact
+          .chunk_graph
+          .connect_chunk_and_entry_module(chunk.ukey(), *module_identifier, entrypoint.ukey);
+      }
+
+      let cgi = chunk_group_info.ukey;
+      self
+        .chunk_group_infos
+        .entry(cgi)
+        .or_insert(chunk_group_info);
+
+      self.chunk_group_info_map.insert(entrypoint.ukey, cgi);
+      if let Some(name) = entrypoint.name() {
+        self.named_chunk_groups.insert(name.to_string(), cgi);
+      }
+
+      (chunk_ukey, entrypoint.ukey)
     };
-
-    if options.depend_on.is_none() && !matches!(&options.runtime, Some(EntryRuntime::String(_))) {
-      entrypoint.set_runtime_chunk(chunk.ukey());
-    }
-
-    entrypoint.set_entrypoint_chunk(chunk.ukey());
-    entrypoint.connect_chunk(chunk);
-
-    compilation
-      .build_chunk_graph_artifact
-      .named_chunk_groups
-      .insert(name.to_string(), entrypoint.ukey);
-
-    compilation
-      .build_chunk_graph_artifact
-      .entrypoints
-      .insert(name.to_string(), entrypoint.ukey);
-
-    let entrypoint = {
-      let ukey = entrypoint.ukey;
-      compilation
-        .build_chunk_graph_artifact
-        .chunk_group_by_ukey
-        .add(entrypoint);
-      compilation
-        .build_chunk_graph_artifact
-        .chunk_group_by_ukey
-        .expect_get(&ukey)
-    };
-
-    for module_identifier in module_identifiers.iter() {
-      compilation
-        .build_chunk_graph_artifact
-        .chunk_graph
-        .add_module(*module_identifier);
-
-      modules.push(*module_identifier);
-
-      compilation
-        .build_chunk_graph_artifact
-        .chunk_graph
-        .connect_chunk_and_entry_module(chunk.ukey(), *module_identifier, entrypoint.ukey);
-    }
 
     let module_graph = compilation.get_module_graph();
     let global_included_modules = compilation
@@ -506,21 +510,16 @@ impl CodeSplitter {
 
     modules.extend(included_modules);
 
-    let cgi = chunk_group_info.ukey;
-    self
-      .chunk_group_infos
-      .entry(cgi)
-      .or_insert(chunk_group_info);
-
-    self.chunk_group_info_map.insert(entrypoint.ukey, cgi);
-    if let Some(name) = entrypoint.name() {
-      self.named_chunk_groups.insert(name.to_string(), cgi);
-    }
-
-    let entrypoint_ukey = entrypoint.ukey;
-
-    if let Some(diagnostic) = incremental_diagnostic {
-      compilation.push_diagnostic(diagnostic);
+    // Handle incremental diagnostic after entry_data is no longer used
+    if has_hash_placeholder {
+      let diagnostic = compilation.incremental.disable_passes(
+        IncrementalPasses::CHUNK_ASSET,
+        "Chunk filename that dependent on full hash",
+        "chunk filename that dependent on full hash is not supported in incremental compilation",
+      ).flatten();
+      if let Some(diagnostic) = diagnostic {
+        compilation.push_diagnostic(diagnostic);
+      }
     }
 
     Ok((entrypoint_ukey, modules))
@@ -546,19 +545,18 @@ impl CodeSplitter {
     let mut runtime_errors = vec![];
 
     if depend_on.is_some() && runtime.is_some() {
+      let artifact = &*compilation.build_chunk_graph_artifact;
       let mut diagnostic = Diagnostic::from(error!(
         "Entrypoint '{name}' has 'dependOn' and 'runtime' specified. This is not valid.
 Entrypoints that depend on other entrypoints do not have their own runtime.
 They will use the runtime(s) from referenced entrypoints instead.
 Remove the 'runtime' option from the entrypoint."
       ));
-      diagnostic.chunk = compilation
-        .build_chunk_graph_artifact
+      diagnostic.chunk = artifact
         .entrypoints
         .get(name)
         .map(|key| {
-          compilation
-            .build_chunk_graph_artifact
+          artifact
             .chunk_group_by_ukey
             .expect_get(key)
             .get_entrypoint_chunk()
@@ -568,11 +566,13 @@ Remove the 'runtime' option from the entrypoint."
     }
 
     if let Some(depend_on) = &options.depend_on {
-      let ukey = compilation
-        .build_chunk_graph_artifact
-        .entrypoints
-        .get(name)
-        .ok_or_else(|| error!("no entrypoints found"))?;
+      let ukey = {
+        let artifact = &*compilation.build_chunk_graph_artifact;
+        *artifact
+          .entrypoints
+          .get(name)
+          .ok_or_else(|| error!("no entrypoints found"))?
+      };
 
       let mut entry_point_runtime = None;
       let mut depend_on_entries = vec![];
@@ -580,22 +580,20 @@ Remove the 'runtime' option from the entrypoint."
       let mut has_error = false;
 
       {
-        let entry_point = compilation
-          .build_chunk_graph_artifact
+        let artifact = &*compilation.build_chunk_graph_artifact;
+        let entry_point = artifact
           .chunk_group_by_ukey
-          .expect_get(ukey);
-        let entry_point_chunk = compilation
-          .build_chunk_graph_artifact
+          .expect_get(&ukey);
+        let entry_point_chunk = artifact
           .chunk_by_ukey
           .expect_get(&entry_point.get_entrypoint_chunk());
         let referenced_chunks = entry_point_chunk
-          .get_all_referenced_chunks(&compilation.build_chunk_graph_artifact.chunk_group_by_ukey);
+          .get_all_referenced_chunks(&artifact.chunk_group_by_ukey);
 
         for dep in depend_on {
-          if let Some(dependency_ukey) = compilation.build_chunk_graph_artifact.entrypoints.get(dep)
+          if let Some(dependency_ukey) = artifact.entrypoints.get(dep)
           {
-            let dependency_chunk_ukey = compilation
-              .build_chunk_graph_artifact
+            let dependency_chunk_ukey = artifact
               .chunk_group_by_ukey
               .expect_get(dependency_ukey)
               .get_entrypoint_chunk();
@@ -609,58 +607,61 @@ Remove the 'runtime' option from the entrypoint."
               has_error = true;
               break;
             }
-            depend_on_entries.push(dependency_ukey);
+            depend_on_entries.push(*dependency_ukey);
           } else {
             panic!("Entry {name} depends on {dep}, but this entry was not found");
           }
         }
       }
 
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
       if has_error {
-        let entry_point = compilation
-          .build_chunk_graph_artifact
+        let entry_point = artifact
           .chunk_group_by_ukey
-          .expect_get_mut(ukey);
+          .expect_get_mut(&ukey);
         entry_point.set_runtime_chunk(entry_point_runtime.expect("Should set runtime chunk"));
       } else {
         {
           for depend in depend_on_entries {
-            let depend_chunk_group = compilation
-              .build_chunk_graph_artifact
+            let depend_chunk_group = artifact
               .chunk_group_by_ukey
-              .expect_get_mut(depend);
-            if depend_chunk_group.add_child(*ukey) {
-              entry_point_parents.push(*depend);
+              .expect_get_mut(&depend);
+            if depend_chunk_group.add_child(ukey) {
+              entry_point_parents.push(depend);
             }
           }
         }
-        let entry_point = compilation
-          .build_chunk_graph_artifact
+        let entry_point = artifact
           .chunk_group_by_ukey
-          .expect_get_mut(ukey);
+          .expect_get_mut(&ukey);
         for parent in entry_point_parents {
           entry_point.add_parent(parent);
         }
       }
     } else if let Some(EntryRuntime::String(runtime)) = &options.runtime {
-      let ukey = compilation
-        .build_chunk_graph_artifact
-        .entrypoints
-        .get(name)
-        .ok_or_else(|| error!("no entrypoints found"))?;
+      let (ukey, chunk_ukey_opt) = {
+        let artifact = &*compilation.build_chunk_graph_artifact;
+        let ukey = *artifact
+          .entrypoints
+          .get(name)
+          .ok_or_else(|| error!("no entrypoints found"))?;
 
-      let entry_point = compilation
-        .build_chunk_graph_artifact
+        let chunk_ukey_opt = artifact
+          .named_chunks
+          .get(runtime)
+          .copied();
+
+        (ukey, chunk_ukey_opt)
+      };
+
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let entry_point = artifact
         .chunk_group_by_ukey
-        .expect_get_mut(ukey);
+        .expect_get_mut(&ukey);
 
-      let chunk = match compilation
-        .build_chunk_graph_artifact
-        .named_chunks
-        .get(runtime)
-      {
+      let chunk = match chunk_ukey_opt {
         Some(ukey) => {
-          if !self.runtime_chunks.contains(ukey) {
+          if !self.runtime_chunks.contains(&ukey) {
             let entry_chunk = entry_point.get_entrypoint_chunk();
             let mut diagnostic = Diagnostic::from(
               error!(
@@ -674,28 +675,25 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
             runtime_errors.push(diagnostic);
             entry_point.set_runtime_chunk(entry_chunk);
           }
-          compilation
-            .build_chunk_graph_artifact
+          artifact
             .chunk_by_ukey
-            .expect_get_mut(ukey)
+            .expect_get_mut(&ukey)
         }
         None => {
           let (chunk_ukey, created) = Compilation::add_named_chunk(
             runtime.clone(),
-            &mut compilation.build_chunk_graph_artifact.chunk_by_ukey,
-            &mut compilation.build_chunk_graph_artifact.named_chunks,
+            &mut artifact.chunk_by_ukey,
+            &mut artifact.named_chunks,
           );
           if created && let Some(mut mutations) = compilation.incremental.mutations_write() {
             mutations.add(Mutation::ChunkAdd { chunk: chunk_ukey });
           }
           self.mask_by_chunk.insert(chunk_ukey, BigUint::from(0u32));
-          let chunk = compilation
-            .build_chunk_graph_artifact
+          let chunk = artifact
             .chunk_by_ukey
             .expect_get_mut(&chunk_ukey);
           chunk.set_prevent_integration(true);
-          compilation
-            .build_chunk_graph_artifact
+          artifact
             .chunk_graph
             .add_chunk(chunk.ukey());
           self.runtime_chunks.insert(chunk.ukey());
@@ -894,19 +892,21 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
     logger.time_end(start);
 
     let start = logger.time("extend chunkGroup runtime");
-    for (chunk_group, cgi) in &self.chunk_group_info_map {
-      let chunk_group = compilation
-        .build_chunk_graph_artifact
-        .chunk_group_by_ukey
-        .expect_get(chunk_group);
-      let cgi = self.chunk_group_infos.expect_get(cgi);
-      for chunk_ukey in chunk_group.chunks.iter() {
-        if let Some(chunk) = compilation
-          .build_chunk_graph_artifact
-          .chunk_by_ukey
-          .get_mut(chunk_ukey)
-        {
-          chunk.set_runtime(merge_runtime(chunk.runtime(), &cgi.runtime));
+    {
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      for (chunk_group, cgi) in &self.chunk_group_info_map {
+        let chunk_group = artifact
+          .chunk_group_by_ukey
+          .expect_get(chunk_group);
+        let cgi = self.chunk_group_infos.expect_get(cgi);
+        let chunk_ukeys = chunk_group.chunks.iter().copied().collect::<Vec<_>>();
+        for chunk_ukey in chunk_ukeys {
+          if let Some(chunk) = artifact
+            .chunk_by_ukey
+            .get_mut(&chunk_ukey)
+          {
+            chunk.set_runtime(merge_runtime(chunk.runtime(), &cgi.runtime));
+          }
         }
       }
     }
@@ -1501,17 +1501,20 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
       }));
       return;
     } else {
-      let chunk_ukey = if let Some(chunk_name) = compilation
+      let chunk_name_opt = compilation
         .get_module_graph()
         .block_by_id(&block_id)
         .unwrap_or_else(|| panic!("should have block: {block_id:?}"))
         .get_group_options()
         .and_then(|x| x.name())
-      {
+        .map(|s| s.to_string());
+
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let chunk_ukey = if let Some(chunk_name) = chunk_name_opt {
         let (chunk_ukey, created) = Compilation::add_named_chunk(
-          chunk_name.to_string(),
-          &mut compilation.build_chunk_graph_artifact.chunk_by_ukey,
-          &mut compilation.build_chunk_graph_artifact.named_chunks,
+          chunk_name,
+          &mut artifact.chunk_by_ukey,
+          &mut artifact.named_chunks,
         );
         if created && let Some(mut mutations) = compilation.incremental.mutations_write() {
           mutations.add(Mutation::ChunkAdd { chunk: chunk_ukey });
@@ -1519,14 +1522,13 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
         chunk_ukey
       } else {
         let chunk_ukey =
-          Compilation::add_chunk(&mut compilation.build_chunk_graph_artifact.chunk_by_ukey);
+          Compilation::add_chunk(&mut artifact.chunk_by_ukey);
         if let Some(mut mutations) = compilation.incremental.mutations_write() {
           mutations.add(Mutation::ChunkAdd { chunk: chunk_ukey });
         }
         chunk_ukey
       };
-      compilation
-        .build_chunk_graph_artifact
+      artifact
         .chunk_graph
         .add_chunk(chunk_ukey);
       self.mask_by_chunk.insert(chunk_ukey, BigUint::from(0u32));
@@ -1557,12 +1559,14 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
             cgi.ukey
           } else {
             let entry_options = entry_options.clone();
-            let chunk = compilation
-              .build_chunk_graph_artifact
-              .chunk_by_ukey
-              .expect_get_mut(&chunk_ukey);
-            if let Some(filename) = &entry_options.filename {
-              chunk.set_filename_template(Some(filename.clone()));
+            {
+              let chunk = compilation
+                .build_chunk_graph_artifact
+                .chunk_by_ukey
+                .expect_get_mut(&chunk_ukey);
+              if let Some(filename) = &entry_options.filename {
+                chunk.set_filename_template(Some(filename.clone()));
+              }
             }
             let mut entrypoint = ChunkGroup::new(ChunkGroupKind::new_entrypoint(
               false,
@@ -1590,10 +1594,10 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
 
             self.chunk_group_infos.entry(ukey).or_insert(cgi);
 
-            entrypoint.set_runtime_chunk(chunk.ukey());
-            entrypoint.set_entrypoint_chunk(chunk.ukey());
-            compilation
-              .build_chunk_graph_artifact
+            entrypoint.set_runtime_chunk(chunk_ukey);
+            entrypoint.set_entrypoint_chunk(chunk_ukey);
+            let artifact = &mut *compilation.build_chunk_graph_artifact;
+            artifact
               .async_entrypoints
               .push(entrypoint.ukey);
             self.next_chunk_group_index += 1;
@@ -1601,26 +1605,23 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
 
             if let Some(name) = entrypoint.kind.name() {
               self.named_async_entrypoints.insert(name.to_owned(), ukey);
-              compilation
-                .build_chunk_graph_artifact
+              artifact
                 .named_chunk_groups
                 .insert(name.to_owned(), entrypoint.ukey);
-              compilation
-                .build_chunk_graph_artifact
+              artifact
                 .named_chunks
-                .insert(name.to_owned(), chunk.ukey());
+                .insert(name.to_owned(), chunk_ukey);
             }
 
+            let chunk = artifact.chunk_by_ukey.expect_get_mut(&chunk_ukey);
             entrypoint.connect_chunk(chunk);
 
             self.chunk_group_info_map.insert(entrypoint.ukey, ukey);
-            compilation
-              .build_chunk_graph_artifact
+            artifact
               .chunk_graph
               .connect_block_and_chunk_group(block_id, entrypoint.ukey);
 
-            compilation
-              .build_chunk_graph_artifact
+            artifact
               .chunk_group_by_ukey
               .add(entrypoint);
             ukey
@@ -1678,11 +1679,6 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
             block.loc(),
             block.request().clone(),
           );
-          let chunk = compilation
-            .build_chunk_graph_artifact
-            .chunk_by_ukey
-            .expect_get_mut(&chunk_ukey);
-
           self.stat_chunk_group_created += 1;
           let info = ChunkGroupInfo::new(
             chunk_group.ukey,
@@ -1697,27 +1693,28 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
           self.next_chunk_group_index += 1;
           chunk_group.index = Some(self.next_chunk_group_index);
 
+          let artifact = &mut *compilation.build_chunk_graph_artifact;
           if let Some(name) = chunk_group.kind.name() {
             self.named_chunk_groups.insert(name.to_owned(), info_ukey);
-            compilation
-              .build_chunk_graph_artifact
+            artifact
               .named_chunk_groups
               .insert(name.to_owned(), chunk_group.ukey);
           }
 
+          let chunk = artifact
+            .chunk_by_ukey
+            .expect_get_mut(&chunk_ukey);
           chunk_group.connect_chunk(chunk);
 
           self
             .chunk_group_info_map
             .insert(chunk_group.ukey, info_ukey);
 
-          compilation
-            .build_chunk_graph_artifact
+          artifact
             .chunk_graph
             .connect_block_and_chunk_group(block_id, chunk_group.ukey);
 
-          compilation
-            .build_chunk_graph_artifact
+          artifact
             .chunk_group_by_ukey
             .add(chunk_group);
           info
