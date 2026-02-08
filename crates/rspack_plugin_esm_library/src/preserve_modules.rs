@@ -99,7 +99,7 @@ pub async fn preserve_modules(
       let file_path = abs_path.relative(root);
       let extension = file_path.extension();
 
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       let old_chunk = artifact.chunk_by_ukey.expect_get_mut(&chunk);
 
       let new_extension = old_chunk

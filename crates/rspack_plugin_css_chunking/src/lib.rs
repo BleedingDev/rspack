@@ -395,7 +395,7 @@ async fn optimize_chunks(&self, compilation: &mut Compilation) -> Result<Option<
   logger.time_end(start);
 
   let start = logger.time("apply split chunks");
-  let artifact = &mut *compilation.build_chunk_graph_artifact;
+  let artifact = &mut compilation.build_chunk_graph_artifact;
   for chunk_state in chunk_states.values() {
     let mut chunks: UkeySet<ChunkUkey> = UkeySet::default();
     for module_identifier in &chunk_state.modules {

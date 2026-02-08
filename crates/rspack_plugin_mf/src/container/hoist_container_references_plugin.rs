@@ -249,7 +249,7 @@ async fn optimize_chunks(&self, compilation: &mut Compilation) -> Result<Option<
         .chunk_graph
         .disconnect_chunk_and_module(&chunk, module);
 
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       if artifact
         .chunk_graph
         .get_number_of_chunk_modules(&chunk)

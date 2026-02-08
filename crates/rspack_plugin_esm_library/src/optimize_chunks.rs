@@ -135,7 +135,7 @@ pub(crate) fn ensure_entry_exports(compilation: &mut Compilation) {
         .connect_chunk_and_entry_module(new_chunk_ukey, m, entrypoint);
     }
 
-    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    let artifact = &mut compilation.build_chunk_graph_artifact;
     let [Some(entry_chunk), Some(new_chunk)] = artifact
       .chunk_by_ukey
       .get_many_mut([&entry_chunk_ukey, &new_chunk_ukey])

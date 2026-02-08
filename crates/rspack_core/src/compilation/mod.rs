@@ -261,7 +261,7 @@ pub struct Compilation {
 
   pub code_generated_modules: IdentifierSet,
   pub build_time_executed_modules: IdentifierSet,
-  pub build_chunk_graph_artifact: StealCell<BuildChunkGraphArtifact>,
+  pub build_chunk_graph_artifact: BuildChunkGraphArtifact,
   pub incremental: Incremental,
 
   pub hash: Option<RspackHashDigest>,
@@ -389,7 +389,7 @@ impl Compilation {
       )),
       build_time_executed_modules: Default::default(),
       incremental,
-      build_chunk_graph_artifact: StealCell::new(Default::default()),
+      build_chunk_graph_artifact: Default::default(),
 
       hash: None,
 
@@ -1066,7 +1066,7 @@ impl Compilation {
   }
 
   pub fn entrypoint_by_name_mut(&mut self, name: &str) -> &mut Entrypoint {
-    let artifact = &mut *self.build_chunk_graph_artifact;
+    let artifact = &mut self.build_chunk_graph_artifact;
     let ukey = artifact
       .entrypoints
       .get(name)

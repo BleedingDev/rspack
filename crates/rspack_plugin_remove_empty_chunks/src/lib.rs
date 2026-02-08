@@ -14,7 +14,7 @@ impl RemoveEmptyChunksPlugin {
     let logger = compilation.get_logger(self.name());
     let start = logger.time("remove empty chunks");
 
-    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    let artifact = &mut compilation.build_chunk_graph_artifact;
     let chunk_graph = &mut artifact.chunk_graph;
     let empty_chunks = artifact
       .chunk_by_ukey

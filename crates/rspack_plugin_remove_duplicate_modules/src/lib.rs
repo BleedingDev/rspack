@@ -137,7 +137,7 @@ async fn optimize_chunks(&self, compilation: &mut Compilation) -> Result<Option<
           .get_chunk_entry_modules(chunk_ukey),
       );
 
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       let [Some(new_chunk), Some(origin)] = artifact
         .chunk_by_ukey
         .get_many_mut([&new_chunk_ukey, chunk_ukey])
@@ -156,7 +156,7 @@ async fn optimize_chunks(&self, compilation: &mut Compilation) -> Result<Option<
       }
     }
 
-    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    let artifact = &mut compilation.build_chunk_graph_artifact;
     for m in modules {
       let is_entry = entry_modules.contains(&m);
       for chunk_ukey in &chunks {

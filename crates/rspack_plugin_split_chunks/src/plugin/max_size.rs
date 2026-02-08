@@ -651,7 +651,7 @@ impl SplitChunksPlugin {
 
         if index != last_index {
           let old_chunk = chunk.ukey();
-          let artifact = &mut *compilation.build_chunk_graph_artifact;
+          let artifact = &mut compilation.build_chunk_graph_artifact;
           let new_chunk_ukey = if let Some(name) = name {
             let (new_chunk_ukey, created) = Compilation::add_named_chunk(
               name,

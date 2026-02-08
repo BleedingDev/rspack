@@ -397,7 +397,7 @@ impl CodeSplitter {
       .map_or(false, |f| f.has_hash_placeholder());
 
     let (_chunk_ukey, entrypoint_ukey) = {
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       let (chunk_ukey, created) = Compilation::add_named_chunk(
         name.to_string(),
         &mut artifact.chunk_by_ukey,
@@ -545,7 +545,7 @@ impl CodeSplitter {
     let mut runtime_errors = vec![];
 
     if depend_on.is_some() && runtime.is_some() {
-      let artifact = &*compilation.build_chunk_graph_artifact;
+      let artifact = &compilation.build_chunk_graph_artifact;
       let mut diagnostic = Diagnostic::from(error!(
         "Entrypoint '{name}' has 'dependOn' and 'runtime' specified. This is not valid.
 Entrypoints that depend on other entrypoints do not have their own runtime.
@@ -567,7 +567,7 @@ Remove the 'runtime' option from the entrypoint."
 
     if let Some(depend_on) = &options.depend_on {
       let ukey = {
-        let artifact = &*compilation.build_chunk_graph_artifact;
+        let artifact = &compilation.build_chunk_graph_artifact;
         *artifact
           .entrypoints
           .get(name)
@@ -580,7 +580,7 @@ Remove the 'runtime' option from the entrypoint."
       let mut has_error = false;
 
       {
-        let artifact = &*compilation.build_chunk_graph_artifact;
+        let artifact = &compilation.build_chunk_graph_artifact;
         let entry_point = artifact
           .chunk_group_by_ukey
           .expect_get(&ukey);
@@ -614,7 +614,7 @@ Remove the 'runtime' option from the entrypoint."
         }
       }
 
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       if has_error {
         let entry_point = artifact
           .chunk_group_by_ukey
@@ -640,7 +640,7 @@ Remove the 'runtime' option from the entrypoint."
       }
     } else if let Some(EntryRuntime::String(runtime)) = &options.runtime {
       let (ukey, chunk_ukey_opt) = {
-        let artifact = &*compilation.build_chunk_graph_artifact;
+        let artifact = &compilation.build_chunk_graph_artifact;
         let ukey = *artifact
           .entrypoints
           .get(name)
@@ -654,7 +654,7 @@ Remove the 'runtime' option from the entrypoint."
         (ukey, chunk_ukey_opt)
       };
 
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       let entry_point = artifact
         .chunk_group_by_ukey
         .expect_get_mut(&ukey);
@@ -893,7 +893,7 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
 
     let start = logger.time("extend chunkGroup runtime");
     {
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       for (chunk_group, cgi) in &self.chunk_group_info_map {
         let chunk_group = artifact
           .chunk_group_by_ukey
@@ -1509,7 +1509,7 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
         .and_then(|x| x.name())
         .map(|s| s.to_string());
 
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       let chunk_ukey = if let Some(chunk_name) = chunk_name_opt {
         let (chunk_ukey, created) = Compilation::add_named_chunk(
           chunk_name,
@@ -1596,7 +1596,7 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
 
             entrypoint.set_runtime_chunk(chunk_ukey);
             entrypoint.set_entrypoint_chunk(chunk_ukey);
-            let artifact = &mut *compilation.build_chunk_graph_artifact;
+            let artifact = &mut compilation.build_chunk_graph_artifact;
             artifact
               .async_entrypoints
               .push(entrypoint.ukey);
@@ -1693,7 +1693,7 @@ Or do you want to use the entrypoints '{name}' and '{runtime}' independently on 
           self.next_chunk_group_index += 1;
           chunk_group.index = Some(self.next_chunk_group_index);
 
-          let artifact = &mut *compilation.build_chunk_graph_artifact;
+          let artifact = &mut compilation.build_chunk_graph_artifact;
           if let Some(name) = chunk_group.kind.name() {
             self.named_chunk_groups.insert(name.to_owned(), info_ukey);
             artifact

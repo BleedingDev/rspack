@@ -35,7 +35,7 @@ impl PassExt for AssignRuntimeIdsPass {
         chunk_graph.set_runtime_id(runtime, chunk.id().map(|id| id.to_string()));
       }
     }
-    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    let artifact = &mut compilation.build_chunk_graph_artifact;
     for i in artifact.entrypoints.iter() {
       process_entrypoint(
         i.1,

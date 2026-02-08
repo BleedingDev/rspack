@@ -64,7 +64,7 @@ impl CodeSplitter {
     module: ModuleIdentifier,
     compilation: &mut Compilation,
   ) -> Result<Vec<ChunkReCreation>> {
-    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    let artifact = &mut compilation.build_chunk_graph_artifact;
 
     // Step 1. find all invalidate chunk groups and remove module from ChunkGraph
     let Some(cgm) = artifact.chunk_graph.get_chunk_graph_module_mut(module) else {
@@ -172,7 +172,7 @@ impl CodeSplitter {
       }
     }
 
-    let artifact = &mut *compilation.build_chunk_graph_artifact;
+    let artifact = &mut compilation.build_chunk_graph_artifact;
 
     // remove cgc and cgm
     for chunk_ukey in chunk_group.chunks.iter() {
@@ -599,7 +599,7 @@ impl CodeSplitter {
 
     // remove async entrypoints
     {
-      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let artifact = &mut compilation.build_chunk_graph_artifact;
       artifact
         .async_entrypoints
         .retain(|cg_ukey| {
