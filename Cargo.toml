@@ -414,7 +414,7 @@ lto           = false
 opt-level = 2
 force-unwind-tables = true
 debug = "limited"
-strip =  "debuginfo"
+strip = false
 
 # This is for production for profiling production build
 [profile.profiling]
