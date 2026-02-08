@@ -93,15 +93,14 @@ pub async fn preserve_modules(
       continue;
     };
     let chunk = EsmLibraryPlugin::get_module_chunk(module_id, compilation);
-    let old_chunk = compilation
-      .build_chunk_graph_artifact
-      .chunk_by_ukey
-      .expect_get_mut(&chunk);
 
     if abs_path.starts_with(root) {
       // split module into single chunk named root
       let file_path = abs_path.relative(root);
       let extension = file_path.extension();
+
+      let artifact = &mut *compilation.build_chunk_graph_artifact;
+      let old_chunk = artifact.chunk_by_ukey.expect_get_mut(&chunk);
 
       let new_extension = old_chunk
         .filename_template()
@@ -129,8 +128,7 @@ pub async fn preserve_modules(
         file_path.to_string_lossy().to_string().into()
       };
 
-      if compilation
-        .build_chunk_graph_artifact
+      if artifact
         .chunk_graph
         .get_chunk_modules_identifier(&chunk)
         .len()
@@ -141,14 +139,12 @@ pub async fn preserve_modules(
         continue;
       }
 
-      let new_chunk_ukey =
-        Compilation::add_chunk(&mut compilation.build_chunk_graph_artifact.chunk_by_ukey);
-      compilation
-        .build_chunk_graph_artifact
-        .chunk_graph
-        .add_chunk(new_chunk_ukey);
-      let [Some(new_chunk), Some(old_chunk)] = compilation
-        .build_chunk_graph_artifact
+      // Drop the old_chunk borrow before we need to borrow artifact again
+      //drop(old_chunk);
+
+      let new_chunk_ukey = Compilation::add_chunk(&mut artifact.chunk_by_ukey);
+      artifact.chunk_graph.add_chunk(new_chunk_ukey);
+      let [Some(new_chunk), Some(old_chunk)] = artifact
         .chunk_by_ukey
         .get_many_mut([&new_chunk_ukey, &chunk])
       else {
@@ -158,16 +154,19 @@ pub async fn preserve_modules(
       new_chunk.set_filename_template(Some(new_filename));
       old_chunk.split(
         new_chunk,
-        &mut compilation.build_chunk_graph_artifact.chunk_group_by_ukey,
+        &mut artifact.chunk_group_by_ukey,
       );
+
+      // Drop chunk borrows before accessing artifact again
+      //drop(new_chunk);
+      //drop(old_chunk);
+
       // disconnect module from other chunks
-      compilation
-        .build_chunk_graph_artifact
+      artifact
         .chunk_graph
         .disconnect_chunk_and_module(&chunk, module_id);
 
-      compilation
-        .build_chunk_graph_artifact
+      artifact
         .chunk_graph
         .connect_chunk_and_module(new_chunk_ukey, module_id);
 

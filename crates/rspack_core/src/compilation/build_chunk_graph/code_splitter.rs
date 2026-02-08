@@ -396,7 +396,7 @@ impl CodeSplitter {
       .as_ref()
       .map_or(false, |f| f.has_hash_placeholder());
 
-    let (chunk_ukey, entrypoint_ukey) = {
+    let (_chunk_ukey, entrypoint_ukey) = {
       let artifact = &mut *compilation.build_chunk_graph_artifact;
       let (chunk_ukey, created) = Compilation::add_named_chunk(
         name.to_string(),
